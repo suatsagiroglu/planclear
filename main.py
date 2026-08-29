@@ -4,7 +4,8 @@ import httpx
 import stripe
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 from pydantic import BaseModel
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
