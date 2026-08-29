@@ -1,7 +1,8 @@
 import os
 import io
 from pathlib import Path
-from fastapi import FastAPI, Response
+from datetime import datetime
+from fastapi import FastAPI, Response, Request, Header, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 import stripe
 from supabase import create_client, Client
@@ -19,6 +20,7 @@ HTML_PATH = BASE_DIR / "templates" / "index.html"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 
 stripe.api_key = STRIPE_SECRET_KEY
 
@@ -77,7 +79,7 @@ async def create_checkout_session(postcode: str = "UK Property", lat: float = 51
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
-# 2. Aylık Pro Abonelik (£49/ay)
+# 2. Pro Abonelik (£49/ay)
 @app.get("/create-subscription-session")
 async def create_subscription_session():
     try:
@@ -102,6 +104,58 @@ async def create_subscription_session():
         return JSONResponse({"url": session.url})
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+# 3. Stripe Webhook (Otomatik Abonelik Takipçisi)
+@app.post("/api/stripe-webhook")
+async def stripe_webhook(request: Request, stripe_signature: str = Header(None)):
+    payload = await request.body()
+    event = None
+
+    try:
+        if STRIPE_WEBHOOK_SECRET:
+            event = stripe.Webhook.construct_event(
+                payload, stripe_signature, STRIPE_WEBHOOK_SECRET
+            )
+        else:
+            event = stripe.Event.construct_from(
+                stripe.util.json.loads(payload), stripe.api_key
+            )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Webhook error: {str(e)}")
+
+    event_type = event["type"]
+    data_object = event["data"]["object"]
+
+    if supabase:
+        try:
+            if event_type == "checkout.session.completed" and data_object.get("mode") == "subscription":
+                customer_email = data_object.get("customer_details", {}).get("email")
+                customer_id = data_object.get("customer")
+                sub_id = data_object.get("subscription")
+
+                if customer_email:
+                    supabase.table("subscriptions").upsert({
+                        "email": customer_email.lower(),
+                        "stripe_customer_id": customer_id,
+                        "stripe_subscription_id": sub_id,
+                        "status": "active",
+                        "plan": "pro"
+                    }, on_conflict="email").execute()
+
+            elif event_type in ["customer.subscription.updated", "customer.subscription.deleted"]:
+                sub_id = data_object.get("id")
+                status = data_object.get("status")
+                current_period_end = datetime.fromtimestamp(data_object.get("current_period_end"))
+
+                supabase.table("subscriptions").update({
+                    "status": status,
+                    "current_period_end": current_period_end.isoformat()
+                }).eq("stripe_subscription_id", sub_id).execute()
+
+        except Exception as err:
+            print(f"Database sync error in webhook: {err}")
+
+    return {"status": "success"}
 
 # PDF İndirme Rotası
 @app.get("/download-report")
