@@ -88,9 +88,20 @@
             }
         }
 
-        function orderReport() {
-            window.location.href = '/create-checkout-session';
+       async function orderReport() {
+    try {
+        const res = await fetch('/create-checkout-session');
+        const data = await res.json();
+        if (data.url) {
+            window.location.href = data.url;
+        } else {
+            alert('Payment session could not be created.');
         }
+    } catch (err) {
+        console.error(err);
+        alert('An error occurred while connecting to payment gateway.');
+    }
+}
     </script>
 </body>
 </html>
