@@ -29,11 +29,8 @@ if SUPABASE_URL and SUPABASE_KEY:
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
-    return templates.TemplateResponse(
-        request=request,
-        name="index.html",
-        context={}
-    )
+    return templates.TemplateResponse("index.html", {"request": request})
+    
 
 @app.get("/api/check-constraints")
 async def check_constraints(lat: float, lon: float):
