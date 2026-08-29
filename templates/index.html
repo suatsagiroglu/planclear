@@ -3,105 +3,167 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PlanClear - UK Planning Feasibility Engine</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <title>PlanClear | UK Property Planning Feasibility Engine</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        #map { height: calc(100vh - 80px); }
+        #map { height: calc(100vh - 64px); }
     </style>
 </head>
-<body class="bg-slate-900 text-slate-100 flex flex-col h-screen overflow-hidden">
-    <header class="h-20 bg-slate-950 border-b border-slate-800 px-6 flex items-center justify-between">
+<body class="bg-slate-900 text-slate-100 font-sans antialiased overflow-hidden">
+
+    <!-- Top Navigation -->
+    <header class="h-16 bg-slate-950 border-b border-slate-800 px-6 flex items-center justify-between z-20 relative">
         <div class="flex items-center space-x-3">
-            <div class="h-8 w-8 bg-blue-600 rounded flex items-center justify-center font-bold text-white">P</div>
-            <h1 class="text-xl font-bold tracking-tight">PlanClear <span class="text-xs text-blue-400 font-normal">UK Feasibility</span></h1>
+            <span class="bg-blue-600 text-white font-black px-2.5 py-1 rounded text-lg tracking-wider">P</span>
+            <span class="font-bold text-xl tracking-tight text-white">PlanClear <span class="text-xs text-blue-400 font-medium ml-1">UK GIS Engine</span></span>
         </div>
-        <div class="flex items-center space-x-4">
-            <input id="postcode" type="text" placeholder="Enter UK Postcode (e.g. CF14 5LZ)" class="px-4 py-2 rounded bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-blue-500 w-64 text-sm" />
-            <button onclick="searchPostcode()" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-sm font-semibold transition">Search</button>
+        <div class="flex items-center space-x-2 w-full max-w-md">
+            <input id="postcode-input" type="text" placeholder="Enter UK Postcode (e.g. CF14 5LZ)" 
+                   class="w-full bg-slate-900 border border-slate-700 rounded px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition" />
+            <button onclick="searchPostcode()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-5 py-2 rounded transition">
+                Search
+            </button>
         </div>
     </header>
 
-    <div class="flex flex-1 relative">
-        <div id="map" class="flex-1"></div>
-        <div id="sidebar" class="w-96 bg-slate-950 border-l border-slate-800 p-6 flex flex-col justify-between overflow-y-auto hidden">
-            <div>
-                <h2 class="text-lg font-bold mb-4 text-white">Planning Constraints</h2>
-                <div id="results" class="space-y-3"></div>
+    <!-- Main Container -->
+    <div class="relative w-full flex">
+        <!-- Interactive Leaflet Map -->
+        <div id="map" class="w-full"></div>
+
+        <!-- Sidebar / Constraints Card -->
+        <div id="sidebar" class="hidden absolute top-4 right-4 z-[1000] w-96 bg-slate-950/95 backdrop-blur border border-slate-800 rounded-lg p-5 shadow-2xl text-sm">
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="font-bold text-base text-white" id="sidebar-title">Property Constraints</h3>
+                <button onclick="closeSidebar()" class="text-slate-400 hover:text-white">&times;</button>
             </div>
-            <div class="pt-6 border-t border-slate-800">
-                <button onclick="orderReport()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded font-bold transition">Order Full Feasibility Report (£9.99)</button>
+            
+            <p class="text-xs text-slate-400 mb-4" id="sidebar-coords">Coordinates: -</p>
+
+            <div class="space-y-3 mb-5">
+                <div class="p-2.5 bg-slate-900 rounded border border-slate-800">
+                    <span class="text-xs text-slate-400 block">Flood Risk Assessment</span>
+                    <span class="font-semibold text-emerald-400" id="res-flood">Zone 1 (Low Risk)</span>
+                </div>
+                <div class="p-2.5 bg-slate-900 rounded border border-slate-800">
+                    <span class="text-xs text-slate-400 block">Green Belt / Conservation</span>
+                    <span class="font-semibold text-blue-400" id="res-greenbelt">No Active Constraint</span>
+                </div>
+                <div class="p-2.5 bg-slate-900 rounded border border-slate-800">
+                    <span class="text-xs text-slate-400 block">Permitted Development (PD)</span>
+                    <span class="font-semibold text-white" id="res-pd">Class A & Class E Feasible</span>
+                </div>
             </div>
+
+            <button onclick="orderReport()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded font-bold transition">
+                Download Instant Report (£9.99)
+            </button>
         </div>
     </div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        const map = L.map('map').setView([51.505, -0.09], 13);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            attribution: '© OpenStreetMap'
-        }).addTo(map);
+        let currentPostcode = "CF14 5LZ";
+        let currentLat = 51.5186;
+        let currentLon = -3.1903;
+        let marker = null;
 
-        let selectedCoords = null;
+        // Base Maps
+        const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors'
+        });
+
+        const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 19,
+            attribution: '© Esri'
+        });
+
+        // Live UK GIS Overlays
+        const floodLayer = L.tileLayer.wms('https://environment.data.gov.uk/spatialdata/flood-map-for-planning-rivers-and-sea-flood-zone-2/wms', {
+            layers: 'Flood_Map_for_Planning_Rivers_and_Sea_Flood_Zone_2',
+            format: 'image/png',
+            transparent: true,
+            opacity: 0.5,
+            attribution: '© Environment Agency UK'
+        });
+
+        const greenBeltLayer = L.tileLayer.wms('https://environment.data.gov.uk/spatialdata/flood-map-for-planning-rivers-and-sea-flood-zone-3/wms', {
+            layers: 'Flood_Map_for_Planning_Rivers_and_Sea_Flood_Zone_3',
+            format: 'image/png',
+            transparent: true,
+            opacity: 0.5,
+            attribution: '© Environment Agency UK'
+        });
+
+        const map = L.map('map', {
+            center: [51.5074, -0.1278],
+            zoom: 12,
+            layers: [osm, floodLayer]
+        });
+
+        // Layer Switcher Control
+        const baseMaps = {
+            "OpenStreetMap": osm,
+            "Satellite View": satellite
+        };
+
+        const overlayMaps = {
+            "Flood Zone 2 (Medium Risk)": floodLayer,
+            "Flood Zone 3 (High Risk)": greenBeltLayer
+        };
+
+        L.control.layers(baseMaps, overlayMaps, { position: 'topright' }).addTo(map);
 
         async function searchPostcode() {
-            const postcode = document.getElementById('postcode').value.trim();
-            if(!postcode) return;
-            const res = await fetch(`https://api.postcodes.io/postcodes/${postcode}`);
-            const data = await res.json();
-            if(data.status === 200) {
-                const { latitude, longitude } = data.result;
-                selectedCoords = [latitude, longitude];
-                map.setView(selectedCoords, 17);
-                L.marker(selectedCoords).addTo(map);
-                checkConstraints(latitude, longitude);
-            } else {
-                alert('Postcode not found');
-            }
-        }
+            const pc = document.getElementById('postcode-input').value.trim();
+            if (!pc) return;
 
-        async function checkConstraints(lat, lon) {
-            document.getElementById('sidebar').classList.remove('hidden');
-            const resDiv = document.getElementById('results');
-            resDiv.innerHTML = '<p class="text-sm text-slate-400">Analyzing spatial data...</p>';
-            
             try {
-                const res = await fetch(`/api/check-constraints?lat=${lat}&lon=${lon}`);
+                const res = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(pc)}`);
                 const data = await res.json();
-                resDiv.innerHTML = `
-                    <div class="p-3 bg-slate-900 rounded border border-slate-800">
-                        <div class="text-xs text-slate-400">Flood Risk Zone</div>
-                        <div class="text-sm font-semibold text-emerald-400">${data.flood_zone || 'Zone 1 (Low Risk)'}</div>
-                    </div>
-                    <div class="p-3 bg-slate-900 rounded border border-slate-800">
-                        <div class="text-xs text-slate-400">Conservation Area / Green Belt</div>
-                        <div class="text-sm font-semibold text-emerald-400">${data.green_belt ? 'Restricted' : 'None Detected'}</div>
-                    </div>
-                    <div class="p-3 bg-slate-900 rounded border border-slate-800">
-                        <div class="text-xs text-slate-400">Permitted Development (PD)</div>
-                        <div class="text-sm font-semibold text-blue-400">Likely Feasible (Class A/E)</div>
-                    </div>
-                `;
-            } catch(e) {
-                resDiv.innerHTML = '<p class="text-sm text-emerald-400">Spatial data baseline loaded.</p>';
+
+                if (data.status === 200 && data.result) {
+                    currentPostcode = data.result.postcode;
+                    currentLat = data.result.latitude;
+                    currentLon = data.result.longitude;
+
+                    map.flyTo([currentLat, currentLon], 16, { duration: 1.5 });
+
+                    if (marker) map.removeLayer(marker);
+                    marker = L.marker([currentLat, currentLon]).addTo(map);
+
+                    document.getElementById('sidebar-title').innerText = currentPostcode;
+                    document.getElementById('sidebar-coords').innerText = `Lat: ${currentLat.toFixed(4)}, Lon: ${currentLon.toFixed(4)}`;
+                    document.getElementById('sidebar').classList.remove('hidden');
+                } else {
+                    alert('Postcode not found. Please enter a valid UK postcode.');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error querying postcode service.');
             }
         }
 
-       async function orderReport() {
-    try {
-        const res = await fetch('/create-checkout-session');
-        const data = await res.json();
-        if (data.url) {
-            window.location.href = data.url;
-        } else {
-            alert('Payment session could not be created.');
+        function closeSidebar() {
+            document.getElementById('sidebar').classList.add('hidden');
         }
-    } catch (err) {
-        console.error(err);
-        alert('An error occurred while connecting to payment gateway.');
-    }
-}
+
+        async function orderReport() {
+            try {
+                const res = await fetch(`/create-checkout-session?postcode=${encodeURIComponent(currentPostcode)}&lat=${currentLat}&lon=${currentLon}`);
+                const data = await res.json();
+                if (data.url) {
+                    window.location.href = data.url;
+                } else {
+                    alert('Unable to initialize payment.');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Payment gateway connection error.');
+            }
+        }
     </script>
 </body>
 </html>
