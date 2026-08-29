@@ -58,7 +58,7 @@ async def create_checkout_session():
                         "name": "PlanClear Planning Feasibility Report",
                         "description": "Comprehensive planning constraints, flood risk, and PD assessment PDF"
                     },
-                    "unit_amount": 4900,
+                    "unit_amount": 999,  # £9.99
                 },
                 "quantity": 1,
             }],
