@@ -1,16 +1,14 @@
 import os
 from pathlib import Path
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
+from fastapi import FastAPI
+from fastapi.responses import FileResponse, JSONResponse
 import stripe
 from supabase import create_client, Client
 
 app = FastAPI(title="PlanClear UK Feasibility Engine")
 
-# Dizin yolları
 BASE_DIR = Path(__file__).resolve().parent
-templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+HTML_PATH = BASE_DIR / "templates" / "index.html"
 
 # Ortam değişkenleri
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
@@ -27,18 +25,12 @@ if SUPABASE_URL and SUPABASE_KEY:
     except Exception as e:
         print(f"Supabase init error: {e}")
 
-@app.get("/", response_class=HTMLResponse)
-async def home(request: Request):
-    return templates.TemplateResponse(
-        request=request,
-        name="index.html",
-        context={}
-    )
-    
+@app.get("/")
+async def home():
+    return FileResponse(HTML_PATH)
 
 @app.get("/api/check-constraints")
 async def check_constraints(lat: float, lon: float):
-    # Coğrafi kısıt analizi (PostGIS veya Mock yanıt)
     if supabase:
         try:
             res = supabase.rpc("check_property_constraints", {"lat": lat, "lon": lon}).execute()
@@ -47,7 +39,6 @@ async def check_constraints(lat: float, lon: float):
         except Exception as e:
             print(f"RPC query error: {e}")
 
-    # Temel mock yanıt
     return {
         "flood_zone": "Zone 1 (Low Risk)",
         "green_belt": False,
