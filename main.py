@@ -15,14 +15,14 @@ app = FastAPI(title="PlanClear UK Feasibility Engine")
 BASE_DIR = Path(__file__).resolve().parent
 HTML_PATH = BASE_DIR / "templates" / "index.html"
 
-# Ortam değişkenleri
+# Ortam Değişkenleri
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
 
 stripe.api_key = STRIPE_SECRET_KEY
 
-# Supabase
+# Supabase Bağlantısı
 supabase: Client = None
 if SUPABASE_URL and SUPABASE_KEY:
     try:
@@ -51,6 +51,7 @@ async def check_constraints(lat: float, lon: float):
         "article_4": False
     }
 
+# 1. Tek Seferlik Rapor (£9.99)
 @app.get("/create-checkout-session")
 async def create_checkout_session(postcode: str = "UK Property", lat: float = 51.5074, lon: float = -0.1278):
     try:
@@ -61,7 +62,7 @@ async def create_checkout_session(postcode: str = "UK Property", lat: float = 51
                     "currency": "gbp",
                     "product_data": {
                         "name": f"PlanClear Feasibility Report ({postcode})",
-                        "description": "Comprehensive planning constraints, flood risk, and PD rights assessment PDF"
+                        "description": "Single comprehensive planning constraints & flood risk assessment PDF."
                     },
                     "unit_amount": 999,  # £9.99
                 },
@@ -76,6 +77,33 @@ async def create_checkout_session(postcode: str = "UK Property", lat: float = 51
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
+# 2. Aylık Pro Abonelik (£49/ay)
+@app.get("/create-subscription-session")
+async def create_subscription_session():
+    try:
+        session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=[{
+                "price_data": {
+                    "currency": "gbp",
+                    "product_data": {
+                        "name": "PlanClear Pro Membership",
+                        "description": "Unlimited property feasibility queries, high-res GIS layers & automated PDF exports."
+                    },
+                    "unit_amount": 4900,  # £49.00
+                    "recurring": {"interval": "month"},
+                },
+                "quantity": 1,
+            }],
+            mode="subscription",
+            success_url="https://planclear.co.uk/?subscription=success",
+            cancel_url="https://planclear.co.uk/?subscription=cancelled",
+        )
+        return JSONResponse({"url": session.url})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+# PDF İndirme Rotası
 @app.get("/download-report")
 async def generate_pdf_report(postcode: str = "General UK", lat: float = 51.5074, lon: float = -0.1278):
     buffer = io.BytesIO()

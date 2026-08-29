@@ -19,11 +19,15 @@
             <span class="bg-blue-600 text-white font-black px-2.5 py-1 rounded text-lg tracking-wider">P</span>
             <span class="font-bold text-xl tracking-tight text-white">PlanClear <span class="text-xs text-blue-400 font-medium ml-1">UK GIS Engine</span></span>
         </div>
-        <div class="flex items-center space-x-2 w-full max-w-md">
+        
+        <div class="flex items-center space-x-3 w-full max-w-lg">
             <input id="postcode-input" type="text" placeholder="Enter UK Postcode (e.g. CF14 5LZ)" 
                    class="w-full bg-slate-900 border border-slate-700 rounded px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition" />
-            <button onclick="searchPostcode()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-5 py-2 rounded transition">
+            <button onclick="searchPostcode()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-5 py-2 rounded transition whitespace-nowrap">
                 Search
+            </button>
+            <button onclick="subscribePro()" class="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white text-xs font-bold px-3.5 py-2 rounded uppercase tracking-wider transition whitespace-nowrap shadow-lg">
+                Go Pro (£49/mo)
             </button>
         </div>
     </header>
@@ -37,7 +41,7 @@
         <div id="sidebar" class="hidden absolute top-4 right-4 z-[1000] w-96 bg-slate-950/95 backdrop-blur border border-slate-800 rounded-lg p-5 shadow-2xl text-sm">
             <div class="flex justify-between items-center mb-3">
                 <h3 class="font-bold text-base text-white" id="sidebar-title">Property Constraints</h3>
-                <button onclick="closeSidebar()" class="text-slate-400 hover:text-white">&times;</button>
+                <button onclick="closeSidebar()" class="text-slate-400 hover:text-white text-xl font-bold">&times;</button>
             </div>
             
             <p class="text-xs text-slate-400 mb-4" id="sidebar-coords">Coordinates: -</p>
@@ -57,9 +61,15 @@
                 </div>
             </div>
 
-            <button onclick="orderReport()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded font-bold transition">
-                Download Instant Report (£9.99)
-            </button>
+            <!-- Action Buttons -->
+            <div class="space-y-2">
+                <button onclick="orderReport()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded font-bold transition">
+                    Download Single Report (£9.99)
+                </button>
+                <button onclick="subscribePro()" class="w-full bg-slate-800 hover:bg-slate-700 border border-amber-500/40 text-amber-300 py-2.5 rounded font-semibold text-xs transition flex items-center justify-center space-x-1.5">
+                    <span>⚡ Unlimited Pro Access — £49/month</span>
+                </button>
+            </div>
         </div>
     </div>
 
@@ -89,7 +99,7 @@
             attribution: '© Environment Agency UK'
         });
 
-        const greenBeltLayer = L.tileLayer.wms('https://environment.data.gov.uk/spatialdata/flood-map-for-planning-rivers-and-sea-flood-zone-3/wms', {
+        const floodZone3Layer = L.tileLayer.wms('https://environment.data.gov.uk/spatialdata/flood-map-for-planning-rivers-and-sea-flood-zone-3/wms', {
             layers: 'Flood_Map_for_Planning_Rivers_and_Sea_Flood_Zone_3',
             format: 'image/png',
             transparent: true,
@@ -103,7 +113,7 @@
             layers: [osm, floodLayer]
         });
 
-        // Layer Switcher Control
+        // Layer Switcher
         const baseMaps = {
             "OpenStreetMap": osm,
             "Satellite View": satellite
@@ -111,7 +121,7 @@
 
         const overlayMaps = {
             "Flood Zone 2 (Medium Risk)": floodLayer,
-            "Flood Zone 3 (High Risk)": greenBeltLayer
+            "Flood Zone 3 (High Risk)": floodZone3Layer
         };
 
         L.control.layers(baseMaps, overlayMaps, { position: 'topright' }).addTo(map);
@@ -162,6 +172,21 @@
             } catch (err) {
                 console.error(err);
                 alert('Payment gateway connection error.');
+            }
+        }
+
+        async function subscribePro() {
+            try {
+                const res = await fetch('/create-subscription-session');
+                const data = await res.json();
+                if (data.url) {
+                    window.location.href = data.url;
+                } else {
+                    alert('Unable to initialize subscription.');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Subscription gateway connection error.');
             }
         }
     </script>
