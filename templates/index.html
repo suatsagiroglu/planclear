@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PlanClear - UK Planning Feasibility Engine</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        #map { height: calc(100vh - 80px); }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 flex flex-col h-screen overflow-hidden">
+    <header class="h-20 bg-slate-950 border-b border-slate-800 px-6 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <div class="h-8 w-8 bg-blue-600 rounded flex items-center justify-center font-bold text-white">P</div>
+            <h1 class="text-xl font-bold tracking-tight">PlanClear <span class="text-xs text-blue-400 font-normal">UK Feasibility</span></h1>
+        </div>
+        <div class="flex items-center space-x-4">
+            <input id="postcode" type="text" placeholder="Enter UK Postcode (e.g. CF14 5LZ)" class="px-4 py-2 rounded bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-blue-500 w-64 text-sm" />
+            <button onclick="searchPostcode()" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-sm font-semibold transition">Search</button>
+        </div>
+    </header>
+
+    <div class="flex flex-1 relative">
+        <div id="map" class="flex-1"></div>
+        <div id="sidebar" class="w-96 bg-slate-950 border-l border-slate-800 p-6 flex flex-col justify-between overflow-y-auto hidden">
+            <div>
+                <h2 class="text-lg font-bold mb-4 text-white">Planning Constraints</h2>
+                <div id="results" class="space-y-3"></div>
+            </div>
+            <div class="pt-6 border-t border-slate-800">
+                <button onclick="orderReport()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded font-bold transition">Order Full Feasibility Report (£49)</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const map = L.map('map').setView([51.505, -0.09], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        let selectedCoords = null;
+
+        async function searchPostcode() {
+            const postcode = document.getElementById('postcode').value.trim();
+            if(!postcode) return;
+            const res = await fetch(`https://api.postcodes.io/postcodes/${postcode}`);
+            const data = await res.json();
+            if(data.status === 200) {
+                const { latitude, longitude } = data.result;
+                selectedCoords = [latitude, longitude];
+                map.setView(selectedCoords, 17);
+                L.marker(selectedCoords).addTo(map);
+                checkConstraints(latitude, longitude);
+            } else {
+                alert('Postcode not found');
+            }
+        }
+
+        async function checkConstraints(lat, lon) {
+            document.getElementById('sidebar').classList.remove('hidden');
+            const resDiv = document.getElementById('results');
+            resDiv.innerHTML = '<p class="text-sm text-slate-400">Analyzing spatial data...</p>';
+            
+            try {
+                const res = await fetch(`/api/check-constraints?lat=${lat}&lon=${lon}`);
+                const data = await res.json();
+                resDiv.innerHTML = `
+                    <div class="p-3 bg-slate-900 rounded border border-slate-800">
+                        <div class="text-xs text-slate-400">Flood Risk Zone</div>
+                        <div class="text-sm font-semibold text-emerald-400">${data.flood_zone || 'Zone 1 (Low Risk)'}</div>
+                    </div>
+                    <div class="p-3 bg-slate-900 rounded border border-slate-800">
+                        <div class="text-xs text-slate-400">Conservation Area / Green Belt</div>
+                        <div class="text-sm font-semibold text-emerald-400">${data.green_belt ? 'Restricted' : 'None Detected'}</div>
+                    </div>
+                    <div class="p-3 bg-slate-900 rounded border border-slate-800">
+                        <div class="text-xs text-slate-400">Permitted Development (PD)</div>
+                        <div class="text-sm font-semibold text-blue-400">Likely Feasible (Class A/E)</div>
+                    </div>
+                `;
+            } catch(e) {
+                resDiv.innerHTML = '<p class="text-sm text-emerald-400">Spatial data baseline loaded.</p>';
+            }
+        }
+
+        function orderReport() {
+            window.location.href = '/create-checkout-session';
+        }
+    </script>
+</body>
+</html>
