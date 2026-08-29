@@ -29,7 +29,11 @@ if SUPABASE_URL and SUPABASE_KEY:
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html",
+        context={}
+    )
     
 
 @app.get("/api/check-constraints")
